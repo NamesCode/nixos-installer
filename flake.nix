@@ -33,6 +33,7 @@
         with pkgs;
         [
           (inputs.nvame.packages.${system}.default)
+          gptfdisk
           fzf
         ];
     in
