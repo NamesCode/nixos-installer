@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: 2025 Name <lasagna@garfunkle.space>
 # SPDX-License-Identifier: MPL-2.0
 
+
 # Exit on any kind of error
 set -euo pipefail
 
@@ -19,12 +20,19 @@ if [ "$USER" != "root" ]; then
   command echo "You need to be root to run this script. Run it again with sudo." && exit 1
 fi
 
+
+# Init
+
 # Info
 echo "For now, the script will just *assume* you have an internet connection. If you do not, *get one*."
 echo "This script also will NOT work for bios systems yet"
 echo "Nor will it work for systems with multiple drives. I need to add that."
 
-# Utility functions
+# Creates the nixos-installer temp dir
+mkdir -p /tmp/nixos-installer
+
+
+# Logic
 
 # Lets us find out what kind of /boot we need to make
 uefi_or_bios() {
@@ -79,19 +87,65 @@ get_boot_drive
 selected_drives=$(echo "$selected_drives" | awk '{print $1}')
 boot_drive=$(echo "$boot_drive" | awk '{print $1}')
 
-if [ "$IS_UEFI" = true ]; then
-  # echo -e "n\n\n+1G\nef00\nn\n\n+4G\n8200\nn\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null
-
-  for drive in "${selected_drives[@]}"; do
-    if [[ "$drive" == "$boot_drive" ]]; then
-          # Skip the boot drive
-          continue
+# Sets up the drives partition tables, partitions and the filesystem for the boot drive
+for drive in "${selected_drives[@]}"; do
+  if [[ "$drive" == "$boot_drive" ]]; then
+    if [[ "${boot_drive:0-1}" =~ ^[0-9]+$ ]]; then
+      filesystem_drives+=("$boot_drive""p3")
+      swap_drive="$boot_drive""p2"
+      boot_drive="$boot_drive""p1"
+    else
+      filesystem_drives+=("$boot_drive""3")
+      swap_drive="$boot_drive""2"
+      boot_drive="$boot_drive""1"
     fi
 
-    # Wipes the drive and replaces it with a new GPT table
-    # echo -e "n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null
-  done
-else
-  echo "BIOS NOT YET IMPLEMENTED"
-fi
+    if [ "$IS_UEFI" = true ]; then
+      # TODO: UNCOMMENT THESE WHEN DONE TESTING
+      # Wipes the drive and replaces it with a new GPT table + a boot and swap partition
+      # echo -e "n\n\n+1G\nef00\nn\n\n+4G\n8200\nn\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+      # 
+      # Formats the boot partition into fat32
+      # sudo mkfs.fat -F 32 -n boot $boot_drive
+      #
+      # Formats the swap partition and swaps on it
+      # sudo mkswap -L swap $swap_drive
+      # sudo swapon $swap_drive
 
+      echo "Would've setup UEFI"
+    else
+      echo "BIOS NOT YET IMPLEMENTED"
+      break
+    fi
+  else
+    if [ "$IS_UEFI" = true ]; then
+      # TODO: UNCOMMENT THESE WHEN DONE TESTING
+      # Wipes the drive and replaces it with a new GPT table
+      # echo -e "n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+
+      echo "Would've setup UEFI"
+    else
+      echo "BIOS NOT YET IMPLEMENTED"
+      break
+    fi
+
+    filesystem_drives+=("$drive""1")
+  fi
+done
+
+
+# Filesystem stuff
+
+# Filesystem specific funtions
+use_zfs() {
+  echo "Do you want to enable encryption? (y/n): "
+  read -r encryption
+
+  if [ "$encryption" = "y" ]; then
+    echo "do stuff"
+  fi
+}
+
+# Get the chosen filesystem
+chosen_filesystem=$(echo -e "ZFS\n" | fzf --header "Select (tab) which filesystem you want to use." \
+    --bind "enter:accept,space:toggle" --height 40%)
