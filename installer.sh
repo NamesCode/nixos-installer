@@ -268,7 +268,7 @@ chosen_filesystem=$(echo -e "ZFS\n" | fzf --header "Select (tab) which filesyste
 
 case "$chosen_filesystem" in
   "ZFS")
-    command use_zfs
+    use_zfs
     ;;
   *)
     command echo "This should not occur" && return 1
