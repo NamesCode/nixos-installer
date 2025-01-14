@@ -149,7 +149,7 @@ encryption() {
 
   case "$prompt_or_usb" in
     [Kk][Ee][Yy]|[Kk])
-      key_drive="$(sudo blkid | grep 'LABEL="KEYDRIVE"' || true | awk '{print $1}' | sed 's/.$//')"
+      key_drive="$(sudo blkid | grep 'LABEL="KEYDRIVE"' || true)"
 
       if [[ -z "$key_drive" ]]; then
         key_drive=$(echo "$remaining_drives" | fzf --header "Select which drive you want to use as the USB keyfile. (This drive will be wiped): " \
@@ -158,6 +158,8 @@ encryption() {
 
         echo -e "o\nw\n" | sudo fdisk "$key_drive"
         sudo mkfs.fat -F 32 -n KEYDRIVE "$key_drive"
+      else
+        key_drive=$(echo "$key_drive" | awk '{print $1}' | sed 's/.$//')
       fi
 
       mkdir -p /mnt
@@ -224,6 +226,7 @@ use_zfs() {
     if [ "$action" = "restart" ]; then
       actions=()
       availabe_drives=${filesystem_drives[*]}
+      continue
     elif [ "$action" = "finish" ]; then
       break
     fi
@@ -236,10 +239,16 @@ use_zfs() {
         available_drives=("${available_drives[@]/$drive}")  # Remove selected drive from available_drives array
     done
 
-    actions+=("$action $(echo "$selected_drives" | tr '\n' ' ')")
+    if [ "$action" = "stripe" ]; then
+      for drive in $selected_drives; do
+        actions=("$drive" "${actions[@]}")
+      done
+    else
+      actions+=("$action $(echo "$selected_drives" | tr '\n' ' ')")
+    fi
   done
 
-  sudo zpool create "$options" "$pool_name" "$(echo "${actions[*]}" | tr '\n' ' ')"
+  sudo zpool create $options "$pool_name" "$(echo "${actions[*]}" | tr '\n' ' ')"
 
   sudo zfs create "$pool_name""/local"
   sudo zfs create "$pool_name""/local/nix"
