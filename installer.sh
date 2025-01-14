@@ -154,7 +154,7 @@ encryption() {
       if [[ -z "$key_drive" ]]; then
         key_drive=$(echo "$remaining_drives" | fzf --header "Select which drive you want to use as the USB keyfile. (This drive will be wiped): " \
           --bind "enter:accept,space:toggle" --height 40%)
-        key_drive=$(echo "$remaining_drives" | awk '{print $1}')
+        key_drive=$(echo "$key_drive" | awk '{print $1}')
 
         echo -e "o\nw\n" | sudo fdisk "$key_drive"
         sudo mkfs.fat -F 32 -n KEYDRIVE "$key_drive"
