@@ -327,7 +327,7 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
         mkdir -p /mnt/keydrive\n\
         \n\
         # Mount the keydrive\n\
-        mount -t auto LABEL=KEYDRIVE /mtn/keydrive\n\
+        mount -t auto LABEL=KEYDRIVE /mnt/keydrive\n\
       '';" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
   fi
 fi
