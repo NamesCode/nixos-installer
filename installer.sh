@@ -295,7 +295,7 @@ esac
 
 # Make and mount boot
 mkdir -p /tmp/nixos-installer/mnt/boot
-sudo mount -t zfs "$boot_drive" /tmp/nixos-installer/mnt/boot
+sudo mount "$boot_drive" /tmp/nixos-installer/mnt/boot
 
 nixos-generate-config --root /tmp/nixos-installer/mnt
 
