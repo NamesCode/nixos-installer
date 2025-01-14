@@ -16,6 +16,8 @@ error_handler() {
     for drive in $selected_drives; do
       sudo umount "$drive"
     done
+
+    sudo umount "$key_drive"
 }
 
 # Catches any kind of error and calls the error_handler function
@@ -147,14 +149,12 @@ encryption() {
 
   case "$prompt_or_usb" in
     [Kk][Ee][Yy]|[Kk])
-      key_drive="$(sudo blkid | grep 'LABEL="KEYDRIVE"' | awk '{print $1}' | sed 's/.$//')"
+      key_drive="$(sudo blkid | grep 'LABEL="KEYDRIVE"' || true | awk '{print $1}' | sed 's/.$//')"
 
-      if [ -z "$key_drive" ]; then
+      if [[ -z "$key_drive" ]]; then
         key_drive=$(echo "$remaining_drives" | fzf --header "Select which drive you want to use as the USB keyfile. (This drive will be wiped): " \
           --bind "enter:accept,space:toggle" --height 40%)
         key_drive=$(echo "$remaining_drives" | awk '{print $1}')
-
-        sudo umount "${key_drive}"?*
 
         echo -e "o\nw\n" | sudo fdisk "$key_drive"
         sudo mkfs.fat -F 32 -n KEYDRIVE "$key_drive"
@@ -181,7 +181,7 @@ encryption() {
       options="$options ""-O encryption=on -O keyformat=passphrase -O keylocation=prompt"
       ;;
     [Nn][Oo][Nn][Ee]|[Nn])
-      command return
+      command echo "Encryption disabled."
       ;;
     *)
       command echo "You can only choose between prompt, key or none. Try again." && encryption
