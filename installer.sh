@@ -315,14 +315,11 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
   if [[ "$prompt_or_usb" =~ [Kk][Ee][Yy]|[Kk] ]]; then
     sed -i "12i \
       # Added by nixos-installer; it lets you decrypt using a USB to hold keyfiles\n\
-      boot.initrd.postDeviceCommands = ''\n\
-        # Prepare /mnt\n\
-        mkdir -p /mnt\n\
-        mkdir -p /mnt/keydrive\n\
-        \n\
-        # Mount keydrive\n\
-        mount -L KEYDRIVE /mnt/keydrive\n\
-      '';" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+      filesystem.\"/mnt/keydrive\" = {\n\
+        device = \"LABEL=KEYDRIVE\";\n\
+        fsType = \"vfat\";\n\
+        neededForBoot = true;\n\
+      };" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
   fi
 fi
 
