@@ -63,6 +63,8 @@ get_drives() {
     --header "Select (tab) all the drives you want to use. WARNING: They will be wiped." \
     --bind "enter:accept,space:toggle" --height 40%)
 
+  remaining_drives="$(echo "$drives" | grep -vxFf <(echo "$selected_drives"))"
+
   # Display the selected drives
   if [ -z "$selected_drives" ]; then
       echo "No drives selected. You must select AT LEAST one."
@@ -101,27 +103,23 @@ for drive in "${selected_drives[@]}"; do
     fi
 
     if [ "$IS_UEFI" = true ]; then
-      # TODO: UNCOMMENT THESE WHEN DONE TESTING
       # Wipes the drive and replaces it with a new GPT table + a boot and swap partition
-      # echo -e "n\n\n+1G\nef00\nn\n\n+4G\n8200\nn\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
-      # 
-      # Formats the boot partition into fat32
-      # sudo mkfs.fat -F 32 -n boot $boot_drive
-      #
-      # Formats the swap partition and swaps on it
-      # sudo mkswap -L swap $swap_drive
-      # sudo swapon $swap_drive
+      echo -e "n\n\n+1G\nef00\nn\n\n+4G\n8200\nn\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
 
-      echo "Would've setup UEFI"
+      # Formats the boot partition into fat32
+      sudo mkfs.fat -F 32 -n boot "$boot_drive"
+
+      # Formats the swap partition and swaps on it
+      sudo mkswap -L swap "$swap_drive"
+      sudo swapon "$swap_drive"
     else
       echo "BIOS NOT YET IMPLEMENTED"
       break
     fi
   else
     if [ "$IS_UEFI" = true ]; then
-      # TODO: UNCOMMENT THESE WHEN DONE TESTING
       # Wipes the drive and replaces it with a new GPT table
-      # echo -e "n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+      echo -e "n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
 
       echo "Would've setup UEFI"
     else
@@ -136,16 +134,165 @@ done
 
 # Filesystem stuff
 
+# Utility functions
+encryption() {
+  echo "Would you like to use a prompt or a USB with a keyfile? (p/prompt/k/key/n/none): "
+  read -r prompt_or_usb
+
+  case "$prompt_or_usb" in
+    [Kk][Ee][Yy]|[Kk])
+      key_drive="$(sudo blkid | grep 'LABEL="KEYDRIVE"' | awk '{print $1}' | sed 's/.$//')"
+
+      if [ -z "$key_drive" ]; then
+        key_drive=$(echo "$remaining_drives" | fzf --header "Select which drive you want to use as the USB keyfile. (This drive will be wiped): " \
+          --bind "enter:accept,space:toggle" --height 40%)
+        key_drive=$(echo "$remaining_drives" | awk '{print $1}')
+
+        sudo umount "${key_drive}"?*
+
+        echo -e "o\nw\n" | sudo fdisk "$key_drive"
+        sudo mkfs.fat -F 32 -n KEYDRIVE "$key_drive"
+      fi
+
+      mkdir -p /mnt
+      mkdir -p /mnt/keydrive
+
+      sudo mount "$key_drive" /mnt/keydrive
+
+      echo "What would you like to call this key? (leave empty for hostname): "
+      read -r key_stem
+
+      if [ -z "$key_stem" ]; then
+        key_stem="$(hostname)"
+      fi
+
+      echo "Now generating a 256-bit key at '/mnt/keydrive/""$key_stem"".key'. This key is stored as hexadecimal and it is recommended you print it out for safe keeping."
+      openssl rand -hex 32 > /mnt/keydrive/"$key_stem".key
+
+      options="$options ""-O encryption=on -O keyformat=hex -O keylocation=file:///mnt/keydrive/""$key_stem"".key"
+      ;;
+    [Pp][Rr][Oo][Mm][Pp][Tt]|[Pp])
+      options="$options ""-O encryption=on -O keyformat=passphrase -O keylocation=prompt"
+      ;;
+    [Nn][Oo][Nn][Ee]|[Nn])
+      command return
+      ;;
+    *)
+      command echo "You can only choose between prompt, key or none. Try again." && encryption
+      ;;
+  esac
+}
+
 # Filesystem specific funtions
 use_zfs() {
-  echo "Do you want to enable encryption? (y/n): "
-  read -r encryption
+  options=""
 
-  if [ "$encryption" = "y" ]; then
-    echo "do stuff"
+  echo "Do you want to enable encryption? (y/n): "
+  read -r enable_encryption
+
+  if [ "$enable_encryption" = "y" ]; then
+    encryption
   fi
+
+  echo "What should the pool name be? (leave blank for 'hostname-pool'): "
+  read -r pool_name
+  if [[ -z "$pool_name" ]]; then
+    pool_name="$(hostname)-pool"
+  fi
+
+  echo "Do you want to enable compression? (y/n): "
+  read -r enable_compression
+
+  if [ "$enable_compression" = "y" ]; then
+    options="$options ""-O compression=on"
+  fi
+
+  options="$options ""-O mountpoint=legacy -O xattr=sa -O acltype=posixacl -o ashift=12"
+
+  actions=()
+  availabe_drives=${filesystem_drives[*]}
+  while true; do
+    action="$(echo -e "restart\nfinish\nstripe\nmirror\nraidz1\nraidz2" | fzf --header "Select (tab) all the drives you want to use for this vdev. WARNING: The capacity of the smallest one selected is the capacity of them all." \
+      --bind "enter:accept,space:toggle" --height 40%)"
+
+    if [ "$action" = "restart" ]; then
+      actions=()
+      availabe_drives=${filesystem_drives[*]}
+    elif [ "$action" = "finish" ]; then
+      break
+    fi
+
+    selected_drives="$(echo "${availabe_drives[*]}" | fzf --preview "lsblk {}" --multi \
+      --header "Select (tab) all the drives you want to use for this vdev. WARNING: The capacity of the smallest one selected is the capacity of them all." \
+      --bind "enter:accept,space:toggle" --height 40%)"
+
+    for drive in $selected_drives; do
+        available_drives=("${available_drives[@]/$drive}")  # Remove selected drive from available_drives array
+    done
+
+    actions+=("$action $(echo "$selected_drives" | tr '\n' ' ')")
+  done
+
+  sudo zpool create "$options" "$pool_name" "$(echo "${actions[*]}" | tr '\n' ' ')"
+
+  sudo zfs create "$pool_name""/local"
+  sudo zfs create "$pool_name""/local/nix"
+
+  sudo zfs create "$pool_name""/backup"
+  sudo zfs create "$pool_name""/backup/monthly"
+  sudo zfs create "$pool_name""/backup/weekly"
+
+  sudo zfs create "$pool_name""/backup/monthly/root"
+
+  sudo zfs create -o "compression=off" "$pool_name""/backup/weekly/var"
+  sudo zfs create "$pool_name""/backup/weekly/srv"
+  sudo zfs create "$pool_name""/backup/weekly/home"
+  sudo zfs create "$pool_name""/backup/weekly/root-user"
+
+  mkdir -p /tmp/nixos-installer/mnt/
+  sudo mount -t zfs "$pool_name""/backup/monthly/root" /tmp/nixos-installer/mnt
+
+  mkdir -p /tmp/nixos-installer/mnt/var /tmp/nixos-installer/mnt/srv /tmp/nixos-installer/mnt/home /tmp/nixos-installer/mnt/root
+  
+  sudo mount -t zfs "$pool_name""/backup/weekly/var" /tmp/nixos-installer/mnt/var
+  sudo mount -t zfs "$pool_name""/backup/weekly/srv" /tmp/nixos-installer/mnt/srv
+  sudo mount -t zfs "$pool_name""/backup/weekly/home" /tmp/nixos-installer/mnt/home
+  sudo mount -t zfs "$pool_name""/backup/weekly/root-user" /tmp/nixos-installer/mnt/root
+
+  zpool status
 }
 
 # Get the chosen filesystem
 chosen_filesystem=$(echo -e "ZFS\n" | fzf --header "Select (tab) which filesystem you want to use." \
     --bind "enter:accept,space:toggle" --height 40%)
+
+case "$chosen_filesystem" in
+  "ZFS")
+    command use_zfs
+    ;;
+  *)
+    command echo "This should not occur" && return 1
+    ;;
+esac
+
+nixos-generate-config --root /tmp/nixos-installer/mnt
+
+if [ "$chosen_filesystem" = "ZFS" ]; then
+  sed -i "12i   boot.supportedFilesystems = [ \"zfs\" ]; # Added by nixos-installer; it enables zfs kernel mod" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+  sed -i "21i   networking.hostId = \"""$(head -c4 /dev/urandom | od -A none -t x4)""\"; # Added by nixos-installer; it sets the hostId as required by ZFS" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
+
+  if [[ "$prompt_or_usb" =~ [Kk][Ee][Yy]|[Kk] ]]; then
+    sed -i "12i   
+    # Added by nixos-installer; it lets you use a USB to hold keyfiles
+    boot.initrd.systemd = {
+      enable = true;
+      contents.\"/etc/fstab\".text = ''
+        LABEL=KEYDRIVE /mnt/keydrive vfat ro
+      '';
+    }" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+  fi
+fi
+
+nvim /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
+
+echo "You're all setup! Feel free to make some last minute changes and then run 'sudo nixos-install --root /tmp/nixos-installer/mnt'"
