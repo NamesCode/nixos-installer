@@ -10,9 +10,12 @@ set -euo pipefail
 error_handler() {
     echo "An error occurred on line $1."
 
-    # Unmount all mounted drives
-    sudo umount "$(echo "$selected_drives" | tr '\n' ' ')"
     sudo swapoff "$swap_drive"
+
+    # Unmount all mounted drives
+    for drive in $selected_drives; do
+      sudo umount "$drive"
+    done
 }
 
 # Catches any kind of error and calls the error_handler function
@@ -106,8 +109,8 @@ for drive in "${selected_drives[@]}"; do
     fi
 
     if [ "$IS_UEFI" = true ]; then
-      # Wipes the drive and replaces it with a new GPT table + a boot and swap partition
-      echo -e "n\n\n+1G\nef00\nn\n\n+4G\n8200\nn\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+      # Wipes the drive and creates a new GPT table + a boot and swap partition
+      echo -e "n\n\n\n+1G\nef00\nn\n\n\n+4G\n8200\nn\n\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
 
       # Formats the boot partition into fat32
       sudo mkfs.fat -F 32 -n boot "$boot_drive"
@@ -121,8 +124,8 @@ for drive in "${selected_drives[@]}"; do
     fi
   else
     if [ "$IS_UEFI" = true ]; then
-      # Wipes the drive and replaces it with a new GPT table
-      echo -e "n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+      # Wipes the drive and creates a new GPT table
+      echo -e "n\n\n\n\n\nw\ny\n" | sudo gdisk "$drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
 
       echo "Would've setup UEFI"
     else
