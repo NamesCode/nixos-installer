@@ -9,7 +9,10 @@ set -euo pipefail
 
 error_handler() {
     echo "An error occurred on line $1."
-    # Cleanup or error handling code here
+
+    # Unmount all mounted drives
+    sudo umount "$(echo "$selected_drives" | tr '\n' ' ')"
+    sudo swapoff "$swap_drive"
 }
 
 # Catches any kind of error and calls the error_handler function
