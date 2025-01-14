@@ -315,18 +315,18 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
   if [[ "$prompt_or_usb" =~ [Kk][Ee][Yy]|[Kk] ]]; then
     sed -i "12i \
       # Added by nixos-installer; it lets you decrypt using a USB to hold keyfiles\n\
-      boot.initrd.postDeviceCommands = \"\"\n\
+      boot.initrd.postDeviceCommands = ''\n\
         # Prepare /mnt\n\
         mkdir -p /mnt\n\
         mkdir -p /mnt/keydrive\n\
         \n\
         # Mount keydrive\n\
         mount -L KEYDRIVE /mnt/keydrive\n\
-      \"\";" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+      '';" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
   fi
 fi
 
-sed -i "21i   networking.hostname = \"""$hostname""\"; # Added by nixos-installer; it sets the hostname" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
+sed -i "21i   networking.hostName = \"""$hostname""\"; # Added by nixos-installer; it sets the hostname" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
 
 nvim -O /tmp/nixos-installer/mnt/etc/nixos/{hardware-configuration,configuration}.nix
 
