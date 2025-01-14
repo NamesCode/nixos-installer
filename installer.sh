@@ -18,6 +18,15 @@ error_handler() {
     done
 
     sudo umount "$key_drive"
+
+    case "$chosen_filesystem" in
+      "ZFS")
+        command sudo zpool destroy "$pool_name"
+        ;;
+      *)
+        command echo "This should not occur" && return 1
+        ;;
+    esac
 }
 
 # Catches any kind of error and calls the error_handler function
