@@ -294,7 +294,7 @@ nixos-generate-config --root /tmp/nixos-installer/mnt
 
 if [ "$chosen_filesystem" = "ZFS" ]; then
   sed -i "12i   boot.supportedFilesystems = [ \"zfs\" ]; # Added by nixos-installer; it enables zfs kernel mod" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
-  sed -i "21i   networking.hostId = \"""$(head -c4 /dev/urandom | od -A none -t x4)""\"; # Added by nixos-installer; it sets the hostId as required by ZFS" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
+  sed -i "21i   networking.hostId = \"""$(head -c4 /dev/urandom | od -A none -t x4 | xargs)""\"; # Added by nixos-installer; it sets the hostId as required by ZFS" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
 
   if [[ "$prompt_or_usb" =~ [Kk][Ee][Yy]|[Kk] ]]; then
     sed -i "12i \
@@ -304,10 +304,10 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
       contents.\"/etc/fstab\".text = ''\n\
         LABEL=KEYDRIVE /mnt/keydrive vfat ro\n\
       '';\n\
-    }" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+    };" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
   fi
 fi
 
-nvim /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
+nvim -O /tmp/nixos-installer/mnt/etc/nixos/{hardware-configuration,configuration}.nix
 
 echo "You're all setup! Feel free to make some last minute changes and then run 'sudo nixos-install --root /tmp/nixos-installer/mnt'"
