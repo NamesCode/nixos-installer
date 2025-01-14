@@ -35,6 +35,7 @@
           (inputs.nvame.packages.${system}.default)
           gptfdisk
           fzf
+          openssl
         ];
     in
     {
