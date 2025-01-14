@@ -42,6 +42,9 @@ mkdir -p /tmp/nixos-installer
 
 # Logic
 
+echo "What would you like to set as the device hostname?: "
+read -r hostname
+
 # Lets us find out what kind of /boot we need to make
 uefi_or_bios() {
   echo "Are you installing on a UEFI or BIOS system? (u/uefi/b/bios): "
@@ -171,7 +174,7 @@ encryption() {
       read -r key_stem
 
       if [ -z "$key_stem" ]; then
-        key_stem="$(hostname)"
+        key_stem="$hostname"
       fi
 
       echo "Now generating a 256-bit key at '/mnt/keydrive/""$key_stem"".key'. This key is stored as hexadecimal and it is recommended you print it out for safe keeping."
@@ -205,7 +208,7 @@ use_zfs() {
   echo "What should the pool name be? (leave blank for 'hostname-pool'): "
   read -r pool_name
   if [[ -z "$pool_name" ]]; then
-    pool_name="$(hostname)-pool"
+    pool_name=""$hostname"-pool"
   fi
 
   echo "Do you want to enable compression? (y/n): "
@@ -290,6 +293,10 @@ case "$chosen_filesystem" in
     ;;
 esac
 
+# Make and mount boot
+mkdir -p /tmp/nixos-installer/mnt/boot
+sudo mount -t zfs "$boot_drive" /tmp/nixos-installer/mnt/boot
+
 nixos-generate-config --root /tmp/nixos-installer/mnt
 
 if [ "$chosen_filesystem" = "ZFS" ]; then
@@ -298,15 +305,19 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
 
   if [[ "$prompt_or_usb" =~ [Kk][Ee][Yy]|[Kk] ]]; then
     sed -i "12i \
-    # Added by nixos-installer; it lets you use a USB to hold keyfiles\n\
-    boot.initrd.systemd = {\n\
-      enable = true;\n\
-      contents.\"/etc/fstab\".text = ''\n\
-        LABEL=KEYDRIVE /mnt/keydrive vfat ro\n\
-      '';\n\
-    };" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
+      # Added by nixos-installer; it lets you decrypt using a USB to hold keyfiles\n\
+      boot.initrd.postDeviceCommands = \"\"\n\
+        # Prepare /mnt\n\
+        mkdir -p /mnt\n\
+        mkdir -p /mnt/keydrive\n\
+        \n\
+        # Mount keydrive\n\
+        mount -L KEYDRIVE /mnt/keydrive\n\
+      \"\";" /tmp/nixos-installer/mnt/etc/nixos/hardware-configuration.nix
   fi
 fi
+
+sed -i "21i   networking.hostname = \"""$hostname""\"; # Added by nixos-installer; it sets the hostname" /tmp/nixos-installer/mnt/etc/nixos/configuration.nix
 
 nvim -O /tmp/nixos-installer/mnt/etc/nixos/{hardware-configuration,configuration}.nix
 
