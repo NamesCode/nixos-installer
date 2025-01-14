@@ -248,7 +248,7 @@ use_zfs() {
     fi
   done
 
-  sudo zpool create $options "$pool_name" "$(echo "${actions[*]}" | tr '\n' ' ')"
+  sudo zpool create $options "$pool_name" $(echo "${actions[*]}" | tr '\n' ' ')
 
   sudo zfs create "$pool_name""/local"
   sudo zfs create "$pool_name""/local/nix"
