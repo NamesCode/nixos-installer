@@ -98,19 +98,19 @@ boot_drive=$(echo "$boot_drive" | awk '{print $1}')
 # Sets up the drives partition tables, partitions and the filesystem for the boot drive
 for drive in "${selected_drives[@]}"; do
   if [[ "$drive" == "$boot_drive" ]]; then
-    if [[ "${boot_drive:0-1}" =~ ^[0-9]+$ ]]; then
-      filesystem_drives+=("$boot_drive""p3")
-      swap_drive="$boot_drive""p2"
-      boot_drive="$boot_drive""p1"
-    else
-      filesystem_drives+=("$boot_drive""3")
-      swap_drive="$boot_drive""2"
-      boot_drive="$boot_drive""1"
-    fi
-
     if [ "$IS_UEFI" = true ]; then
       # Wipes the drive and creates a new GPT table + a boot and swap partition
       echo -e "n\n\n\n+1G\nef00\nn\n\n\n+4G\n8200\nn\n\n\n\n\nw\ny\n" | sudo gdisk "$boot_drive" > /dev/null 2>> /tmp/nixos-installer/errors.log
+
+      if [[ "${boot_drive:0-1}" =~ ^[0-9]+$ ]]; then
+        filesystem_drives+=("$boot_drive""p3")
+        swap_drive="$boot_drive""p2"
+        boot_drive="$boot_drive""p1"
+      else
+        filesystem_drives+=("$boot_drive""3")
+        swap_drive="$boot_drive""2"
+        boot_drive="$boot_drive""1"
+      fi
 
       # Formats the boot partition into fat32
       sudo mkfs.fat -F 32 -n boot "$boot_drive"
