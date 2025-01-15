@@ -323,8 +323,17 @@ if [ "$chosen_filesystem" = "ZFS" ]; then
       \n\
       boot.initrd.postDeviceCommands = ''\n\
         # Make mount point\n\
-        mkdir -p /mnt\n\
         mkdir -p /mnt/keydrive\n\
+        \n\
+        # Wait until the drive is availabe\n\
+        attempt=0\n\
+        while [ \"\$attempt\" -le 60 ]; do\n\
+          if [ -n \"\$(lsblk -o LABEL 2>/dev/null | grep 'KEYDRIVE')\" ]; then\n\
+            break\n\
+          fi\n\
+          sleep 1\n\
+          attempt=\$((attempt + 1)\n\
+        done\n\
         \n\
         # Mount the keydrive\n\
         mount -t auto LABEL=KEYDRIVE /mnt/keydrive\n\
